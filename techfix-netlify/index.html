@@ -835,7 +835,8 @@ function setAiStatus(label, ok){
 async function pingBuiltInAI(){
   try{
     const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ping:true})});
-    if(res.status===200 || res.status===400){ setAiStatus('Built-in assistant available', true); return; }
+    const d=await res.json().catch(()=>({}));
+    if((res.status===200 && d.configured!==false) || res.status===400){ setAiStatus('Built-in assistant available', true); return; }
   }catch(e){}
   setAiStatus('Offline guide matcher ready', false);
 }
@@ -852,6 +853,8 @@ async function callAI(userQuery, containerId){
   const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:userQuery,guides:guidesList,history})});
   const data=await res.json().catch(()=>({}));
   if(!res.ok || (!data.text && !data.reply)) throw new Error(data.error || ('Built-in assistant unavailable ('+res.status+').'));
+  // Safety net: never show raw JSON to the student — use the offline guide matcher instead
+  if(!data.reply){ const t=String(data.text||'').trim(); if(/^[\[{`]/.test(t) || t.indexOf('"mode"')>-1) throw new Error('The assistant reply was incomplete.'); }
   return data;
 }
 function ytSearchUrl(q){ return `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`; }
