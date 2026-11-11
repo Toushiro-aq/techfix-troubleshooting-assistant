@@ -46,7 +46,7 @@ For "troubleshoot":
   "followUp": "one short question to narrow down the issue, or empty string",
   "askTeacher": "when to stop and ask a teacher/technician, or empty string"
 }
-For troubleshoot, keep causes to 2–4 and steps to 3–6. Each string under ~25 words. Always answer in the same language style the student used: plain English if they wrote in English, Taglish/Filipino only if they did.`
+The JSON must be complete and valid (escape any quotes inside strings, never leave it unfinished). For troubleshoot, keep causes to 2–4 and steps to 3–6. Each string under ~25 words. Always answer in the same language style the student used: plain English if they wrote in English, Taglish/Filipino only if they did.`
 
 type Turn = { role: 'user' | 'assistant'; content: string }
 
@@ -58,11 +58,15 @@ function parseReply(raw: string) {
   const start = raw.indexOf('{')
   const end = raw.lastIndexOf('}')
   if (start === -1 || end <= start) return null
-  try {
-    return JSON.parse(raw.slice(start, end + 1))
-  } catch {
-    return null
+  const chunk = raw.slice(start, end + 1)
+  // Try as-is, then repair common model slips: raw line breaks inside strings, trailing commas
+  const attempts = [chunk, chunk.replace(/[\u0000-\u001F]+/g, ' '), chunk.replace(/[\u0000-\u001F]+/g, ' ').replace(/,\s*([}\]])/g, '$1')]
+  for (const a of attempts) {
+    try {
+      return JSON.parse(a)
+    } catch {}
   }
+  return null
 }
 
 export default async (req: Request) => {
@@ -92,39 +96,42 @@ export default async (req: Request) => {
   const baseUrl = (process.env.ANTHROPIC_BASE_URL || '').replace(/\/$/, '')
 
   try {
-    const res = await fetch(`${baseUrl}/v1/messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY || '',
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 1200,
-        system: `${SYSTEM}\n\nTechFix guides available:\n${guides}`,
-        messages: [...history, { role: 'user', content: query }],
-      }),
-    })
+    // Ask up to twice: if the AI's JSON comes back broken or cut off, try once more.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await fetch(`${baseUrl}/v1/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.ANTHROPIC_API_KEY || '',
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          max_tokens: 2500,
+          system: `${SYSTEM}\n\nTechFix guides available:\n${guides}`,
+          messages: [...history, { role: 'user', content: query }],
+        }),
+      })
 
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '')
-      console.error('AI Gateway error', res.status, detail.slice(0, 500))
-      const why = res.status === 429 ? 'Too many requests right now — try again in a minute.' : `AI service error (${res.status}).`
-      return Response.json({ error: why }, { status: 502 })
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '')
+        console.error('AI Gateway error', res.status, detail.slice(0, 500))
+        const why = res.status === 429 ? 'Too many requests right now — try again in a minute.' : `AI service error (${res.status}).`
+        return Response.json({ error: why }, { status: 502 })
+      }
+
+      const data = await res.json()
+      const raw: string = (data?.content || [])
+        .filter((b: any) => b.type === 'text')
+        .map((b: any) => b.text)
+        .join('')
+        .trim()
+      const reply = raw && data?.stop_reason !== 'max_tokens' ? parseReply(raw) : null
+      if (reply) return Response.json({ text: reply.message || reply.problem || '', reply })
+      console.error('AI reply was not valid JSON (attempt ' + (attempt + 1) + ', stop_reason=' + data?.stop_reason + '):', raw.slice(0, 200))
     }
-
-    const data = await res.json()
-    const raw: string = (data?.content || [])
-      .filter((b: any) => b.type === 'text')
-      .map((b: any) => b.text)
-      .join('')
-      .trim()
-    if (!raw) return Response.json({ error: 'Empty AI reply.' }, { status: 502 })
-
-    const reply = parseReply(raw)
-    // `text` is kept so the chat still works if the reply wasn't valid JSON
-    return Response.json({ text: reply ? reply.message || reply.problem || '' : raw, reply })
+    // Never show raw JSON to the student: the page falls back to the offline guide matcher.
+    return Response.json({ error: 'The AI reply was incomplete — please try again.' }, { status: 502 })
   } catch (e: any) {
     console.error('AI request failed', e)
     return Response.json({ error: 'Could not reach the AI service.' }, { status: 502 })
