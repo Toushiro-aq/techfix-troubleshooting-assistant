@@ -270,6 +270,11 @@ footer{text-align:center;color:var(--muted);padding:28px 10px;font-size:12.5px;b
 .dots{display:inline-flex;gap:3px;margin-left:5px;vertical-align:middle}
 .dots i{display:block;width:6px;height:6px;border-radius:50%;background:var(--muted)}
 .mini-chat{transform-origin:100% 100%}
+.grid,.hero{perspective:1000px}
+.spark{position:absolute;border-radius:50%;background:#fff;pointer-events:none;opacity:0}
+.hero-actions .btn{transition:background .15s,box-shadow .15s}
+#scrollbar{position:fixed;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#2563eb,#7db4ff);transform:scaleX(0);transform-origin:left;z-index:60;pointer-events:none}
+@media print{#scrollbar{display:none}}
 @media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}.view{animation:none}}
 </style>
 </head>
@@ -854,6 +859,16 @@ const FX=(function(){
         animate('.hero .o2',{translateX:[0,50],translateY:[0,-25],scale:[1,1.2],duration:7500,ease:'inOutSine',loop:true,alternate:true})
       ];
     }catch(e){}
+    // floating sparks
+    try{
+      const hero=document.querySelector('.hero'), rnd=(a,b)=>a+Math.random()*(b-a);
+      for(let i=0;i<16;i++){
+        const s=document.createElement('span'); s.className='spark'; s.setAttribute('aria-hidden','true');
+        const sz=rnd(3,7); s.style.cssText='width:'+sz+'px;height:'+sz+'px;left:'+rnd(2,98)+'%;top:'+rnd(15,98)+'%';
+        hero.appendChild(s);
+        orbs.push(animate(s,{translateY:[0,-rnd(40,110)],translateX:[0,rnd(-30,30)],opacity:[0,.8,0],duration:rnd(3500,7000),delay:rnd(0,4000),ease:'inOutSine',loop:true}));
+      }
+    }catch(e){}
     scroll('#home .section-head, #home .grid > .card, #home > .card');
   }
 
@@ -871,6 +886,33 @@ const FX=(function(){
       try{ anime.animate(ic,{scale:[1.22,1],rotate:[-12,0],duration:700,ease:'outElastic(1,.5)',onComplete:()=>ic.style.removeProperty('transform')}); }catch(_){}
     });
     window.addEventListener('beforeprint',showAll);
+
+    // 3D tilt on cards + magnetic hero buttons
+    let tiltEl=null, magEl=null;
+    const spring=(el,done)=>{ try{ anime.animate(el,{rotateX:0,rotateY:0,translateX:0,translateY:0,duration:600,ease:'outElastic(1,.6)',onComplete:()=>{ el.style.removeProperty('transform'); if(done) done(); }}); }catch(_){ el.style.removeProperty('transform'); } };
+    document.addEventListener('pointermove',e=>{
+      if(!ok()||e.pointerType!=='mouse') return;
+      const t=e.target.closest?e.target:null; if(!t) return;
+      const c=t.closest('.card.hover, .hero-card'), m=t.closest('.hero-actions .btn');
+      if(tiltEl&&tiltEl!==c){ spring(tiltEl); tiltEl=null; }
+      if(magEl&&magEl!==m){ spring(magEl); magEl=null; }
+      try{
+        if(c&&!c.__fx){
+          tiltEl=c; const r=c.getBoundingClientRect();
+          anime.animate(c,{rotateY:((e.clientX-r.left)/r.width-.5)*10,rotateX:-((e.clientY-r.top)/r.height-.5)*10,duration:250,ease:'outQuad'});
+        }
+        if(m){
+          magEl=m; const r=m.getBoundingClientRect();
+          anime.animate(m,{translateX:(e.clientX-r.left-r.width/2)*.25,translateY:(e.clientY-r.top-r.height/2)*.35,duration:250,ease:'outQuad'});
+        }
+      }catch(_){}
+    });
+    document.documentElement.addEventListener('mouseleave',()=>{ if(tiltEl){spring(tiltEl);tiltEl=null;} if(magEl){spring(magEl);magEl=null;} });
+
+    // scroll progress bar
+    const bar=document.createElement('div'); bar.id='scrollbar'; bar.setAttribute('aria-hidden','true'); document.body.appendChild(bar);
+    let tick=false;
+    addEventListener('scroll',()=>{ if(tick) return; tick=true; requestAnimationFrame(()=>{ const h=document.documentElement.scrollHeight-innerHeight; bar.style.transform='scaleX('+(h>0?Math.min(1,scrollY/h):0)+')'; tick=false; }); },{passive:true});
     if(performance.now()>3000) return;   // library arrived late: skip the intro so nothing flashes
     intro();
   }
