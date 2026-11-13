@@ -18,6 +18,25 @@
 <meta name="twitter:title" content="TechFix — Computer Troubleshooting Assistant">
 <meta name="twitter:description" content="Step-by-step guides for common computer problems. A Grade 12 CSS research prototype for CSS students at Paliparan 3 SHS.">
 <script>(function(){try{var t=localStorage.getItem('techfix_theme');if(t!=='dark'&&t!=='light')t=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<script>
+/* anime.js loader: tries a local copy first, then CDNs. If none loads, the app simply runs without animations. */
+(function(){
+  var srcs=['anime.umd.min.js','https://cdn.jsdelivr.net/npm/animejs@4/dist/bundles/anime.umd.min.js','https://unpkg.com/animejs@4/dist/bundles/anime.umd.min.js'];
+  var cbs=[];
+  function has(){return !!(window.anime&&typeof window.anime.animate==='function');}
+  function finish(){window.__animeDone=true;if(!has())console.warn('[TechFix] anime.js could not be loaded - animations are off.');cbs.splice(0).forEach(function(f){f();});}
+  window.onAnime=function(f){if(window.__animeDone)f();else cbs.push(f);};
+  function next(i){
+    if(has())return finish();
+    if(i>=srcs.length)return finish();
+    var s=document.createElement('script');s.src=srcs[i];
+    s.onload=function(){has()?finish():next(i+1);};
+    s.onerror=function(){next(i+1);};
+    document.head.appendChild(s);
+  }
+  next(0);
+})();
+</script>
 <style>
 :root{
   --blue:#2563eb;--blue2:#1d4ed8;--blue-soft:#eef4ff;--blue-border:#bfdbfe;
@@ -236,6 +255,22 @@ footer{text-align:center;color:var(--muted);padding:28px 10px;font-size:12.5px;b
 .recent .recent-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
 .rchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:var(--surface);border-radius:99px;padding:6px 12px;cursor:pointer;font-weight:600;font-size:12.5px;color:var(--navy)}
 .rchip:hover{border-color:var(--blue-border);background:var(--blue-soft);color:var(--blue-ink)}
+
+/* ANIMATION SUPPORT (anime.js) */
+.hero>div{position:relative;z-index:1}
+.hero .orb{position:absolute;border-radius:50%;pointer-events:none}
+.hero .orb.o1{width:190px;height:190px;top:-60px;left:40%;background:radial-gradient(circle at 35% 35%,rgba(125,180,255,.38),transparent 68%)}
+.hero .orb.o2{width:130px;height:130px;bottom:20px;left:-30px;background:radial-gradient(circle at 40% 40%,rgba(255,255,255,.18),transparent 70%)}
+.hero h1 .w{display:inline-block;white-space:nowrap}
+.hero h1 .c{display:inline-block}
+#progressBox{position:relative}
+.pbar{height:6px;border-radius:99px;background:var(--green-bd);margin-top:8px;overflow:hidden}
+.pbar i{display:block;height:100%;width:100%;background:var(--green-tx);border-radius:99px;transform-origin:left center;transform:scaleX(0)}
+.confetti{position:absolute;left:50%;top:50%;width:8px;height:8px;border-radius:2px;pointer-events:none}
+.dots{display:inline-flex;gap:3px;margin-left:5px;vertical-align:middle}
+.dots i{display:block;width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.mini-chat{transform-origin:100% 100%}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}.view{animation:none}}
 </style>
 </head>
 <body>
@@ -258,6 +293,7 @@ footer{text-align:center;color:var(--muted);padding:28px 10px;font-size:12.5px;b
   <!-- HOME -->
   <section id="home" class="view active">
     <div class="hero">
+      <span class="orb o1" aria-hidden="true"></span><span class="orb o2" aria-hidden="true"></span>
       <div>
         <span class="badge">🎓 Grade 11–12 CSS • S.Y. 2026–2027 • Paliparan 3 SHS</span>
         <h1>Fix it.<br>Understand it.</h1>
@@ -348,7 +384,7 @@ footer{text-align:center;color:var(--muted);padding:28px 10px;font-size:12.5px;b
         <ul id="causes" style="margin:0;padding-left:18px"></ul>
         <h3 style="margin:18px 0 8px">Step-by-step troubleshooting <span class="small" style="font-weight:600">— tick as you go</span></h3>
         <div id="steps" class="steps"></div>
-        <div id="progressBox" class="good" style="display:none"></div>
+        <div id="progressBox" class="good" style="display:none"><span id="progTxt"></span><div class="pbar" aria-hidden="true"><i id="progFill"></i></div></div>
         <div id="videoForGuide" style="margin-top:14px"></div>
         <div class="warn" style="margin-top:14px">⚠️ Safety: Unplug or ask your teacher before opening any computer case. Stop and ask a qualified technician for board-level, power supply, or advanced networking repair. This guide covers <b>basic</b> procedures only.</div>
         <div class="good" style="margin-top:10px">✅ If the problem is fixed, you can stop. If not, try the next step or ask for help. Use “Did this guide help?” to record feedback on this device.</div>
@@ -582,6 +618,265 @@ let currentId=null;
 let lastList='problems';
 let completedSteps=new Set();
 
+// ---------- ANIMATIONS (anime.js v4 — optional: the app works the same without it) ----------
+let listKey=null, listAnimUntil=0, progPrev=0;
+const FX=(function(){
+  const mq=window.matchMedia?matchMedia('(prefers-reduced-motion: reduce)'):null;
+  const force=/[?&]motion=on/.test(location.search);
+  const ok=()=>(force||!(mq&&mq.matches))&&typeof anime!=='undefined'&&anime&&typeof anime.animate==='function';
+  const arr=t=>typeof t==='string'?[...document.querySelectorAll(t)]:(t instanceof Element?[t]:[...(t||[])]);
+  const clear=els=>els.forEach(el=>{el.style.removeProperty('opacity');el.style.removeProperty('transform');});
+  let io=null, pending=[], deviceAnim=null, orbs=[];
+
+  // stop whatever is still animating these elements and leave them clean
+  function stopPrev(els){
+    els.forEach(el=>{
+      const a=el.__fx; if(!a) return;
+      try{a.pause();}catch(e){}
+      if(a.__els) clear(a.__els);
+      el.__fx=null;
+    });
+  }
+  // hide elements right before they animate in (so there is no flash)
+  function prep(els,o){
+    stopPrev(els);
+    els.forEach(el=>{
+      el.style.opacity='0';
+      el.style.transform='translateY('+(o.y||0)+'px) translateX('+(o.x||0)+'px)';
+    });
+  }
+  function play(els,o){
+    o=o||{};
+    const y=o.y==null?18:o.y, x=o.x||0;
+    try{
+      const {animate,stagger}=anime;
+      const p={
+        opacity:[0,1],
+        duration:o.duration||650,
+        ease:o.ease||'outCubic',
+        delay:stagger(o.stagger==null?60:o.stagger,{start:o.delay||0}),
+        onComplete:()=>{ clear(els); els.forEach(el=>{ if(el.__fx===anim) el.__fx=null; }); }
+      };
+      if(y) p.translateY=[y,0];
+      if(x) p.translateX=[x,0];
+      if(o.scale) p.scale=[o.scale,1];
+      const anim=animate(els,p);
+      anim.__els=els; els.forEach(el=>{el.__fx=anim;});
+      return anim;
+    }catch(e){ clear(els); }
+  }
+  function reveal(sel,o){
+    if(!ok()) return;
+    const els=arr(sel); if(!els.length) return;
+    o=o||{};
+    prep(els,{y:o.y==null?18:o.y,x:o.x||0});
+    return play(els,o);
+  }
+
+  // reveal-on-scroll (long pages)
+  function scroll(selector){
+    if(!ok()||!('IntersectionObserver' in window)) return;
+    const els=arr(selector).filter(el=>!el.closest('.hero'));
+    if(io) io.disconnect();
+    pending=els;
+    if(!els.length) return;
+    prep(els,{y:26});
+    io=new IntersectionObserver(es=>{
+      const vis=es.filter(e=>e.isIntersecting).map(e=>e.target);
+      if(!vis.length) return;
+      vis.forEach(t=>io.unobserve(t));
+      play(vis,{y:26,stagger:70,duration:650});
+    },{threshold:.1,rootMargin:'0px 0px -5% 0px'});
+    els.forEach(el=>io.observe(el));
+  }
+  function showAll(){ if(io) io.disconnect(); clear(pending); }   // used before printing
+
+  // guide list: stagger cards in when the result set changes
+  function list(key){
+    if(!ok()) return;
+    const now=performance.now();
+    if(key===listKey && now>=listAnimUntil) return;
+    listKey=key;
+    const cards=arr('#list > .card'); if(!cards.length) return;
+    const st=Math.min(55,520/cards.length);
+    reveal(cards,{y:18,stagger:st,duration:550});
+    listAnimUntil=now+300+st*cards.length;
+  }
+
+  function detail(){
+    reveal('#detail .back',{x:-14,y:0,stagger:0,duration:500});
+    reveal('#detail .detail-grid > div:first-child',{y:22,stagger:0,delay:60});
+    reveal('#detail .detail-grid > div:last-child > .card',{y:22,stagger:90,delay:180});
+    reveal('#causes li',{x:-14,y:0,stagger:50,delay:220,duration:500});
+    reveal('#steps .step',{x:-22,y:0,stagger:70,delay:280,duration:550});
+    reveal('#steps .num',{y:0,scale:.3,stagger:70,delay:420,duration:550,ease:'outBack'});
+    const d=document.querySelector('#detail .illustration .device');
+    if(d){
+      try{ deviceAnim=anime.animate(d,{translateY:[0,-7],duration:1800,ease:'inOutSine',loop:true,alternate:true}); }catch(e){}
+    }
+  }
+
+  function enter(id){
+    if(!ok()) return;
+    if(deviceAnim){
+      try{deviceAnim.pause();}catch(e){}
+      deviceAnim=null;
+      const d=document.querySelector('#detail .illustration .device'); if(d) d.style.removeProperty('transform');
+    }
+    orbs.forEach(a=>{ try{ if(id==='home'){ (a.resume||a.play).call(a); } else { a.pause(); } }catch(e){} });
+    if(id==='home') scroll('#home .section-head, #home .grid > .card, #home > .card');
+    else if(id==='problems') reveal('#problems .section-head, #problems .search, #problems .chips, #problems .toolbar',{y:14,stagger:70,duration:550});
+    else if(id==='detail') detail();
+    else if(id==='chat'){
+      reveal('#chat .section-head, #chat > .card',{y:14,stagger:70,duration:550});
+      reveal('#chat .chat-side .suggestion',{x:-18,y:0,stagger:55,delay:150,duration:500});
+      reveal('#chat .chat-main',{y:20,stagger:0,delay:120});
+    }
+    else if(id==='favorites'){
+      reveal('#favorites .section-head',{y:14,stagger:0,duration:550});
+      reveal('#favList .card, #favEmpty',{y:18,stagger:60,delay:100,duration:550});
+    }
+    else if(id==='about') reveal('#about .section-head, #about .grid2 > .card, #about > .card',{y:18,stagger:70,duration:550});
+  }
+
+  // ---- micro-interactions ----
+  function pop(el){
+    if(!ok()||!el) return;
+    try{ anime.animate(el,{scale:[.55,1],duration:520,ease:'outBack',onComplete:()=>el.style.removeProperty('transform')}); }catch(e){}
+  }
+  function popFav(i){
+    if(!ok()) return;
+    setTimeout(()=>{   // after the list re-renders
+      const t=[...document.querySelectorAll('[data-fav="'+i+'"]')];
+      if(currentId===i){ const b=document.getElementById('favBtn'); if(b) t.push(b); }
+      t.forEach(el=>{
+        el.style.transition='none';
+        try{
+          anime.animate(el,{scale:[.5,1],rotate:[-25,0],duration:700,ease:'outElastic(1,.5)',
+            onComplete:()=>{ el.style.removeProperty('transform'); el.style.removeProperty('transition'); }});
+        }catch(e){ el.style.removeProperty('transition'); }
+      });
+    },0);
+  }
+  function bubble(d,who){
+    reveal(d,{x:who==='me'?24:-24,y:8,scale:.92,stagger:0,duration:420,ease:'outCubic'});
+  }
+  function dots(el){
+    if(!ok()) return;
+    try{
+      const {animate,stagger}=anime;
+      el.__fx=animate([...el.querySelectorAll('.dots i')],{translateY:[0,-5],opacity:[.35,1],duration:420,ease:'inOutSine',loop:true,alternate:true,delay:stagger(120)});
+    }catch(e){}
+  }
+  function stop(el){ const a=el&&el.__fx; if(a){ try{a.pause();}catch(e){} el.__fx=null; } }
+  function mini(open){
+    if(!ok()) return;
+    if(open) reveal('#miniChat',{y:24,scale:.94,stagger:0,duration:380});
+    const f=document.querySelector('.fab');
+    if(f){ try{ anime.animate(f,{scale:[.8,1],rotate:[open?-40:40,0],duration:600,ease:'outElastic(1,.6)',onComplete:()=>f.style.removeProperty('transform')}); }catch(e){} }
+  }
+  function spinTheme(){
+    if(!ok()) return;
+    const b=document.getElementById('themeBtn'); if(!b) return;
+    try{ anime.animate(b,{rotate:[0,360],scale:[.7,1],duration:600,ease:'outBack',onComplete:()=>b.style.removeProperty('transform')}); }catch(e){}
+  }
+  function setProgress(r){
+    const f=document.getElementById('progFill'); if(!f) return;
+    const from=progPrev; progPrev=r;
+    if(!ok()){ f.style.transform='scaleX('+r+')'; return; }
+    try{ anime.animate(f,{scaleX:[from,r],duration:500,ease:'outCubic'}); }
+    catch(e){ f.style.transform='scaleX('+r+')'; }
+  }
+  function resetProgress(){
+    progPrev=0;
+    const f=document.getElementById('progFill'); if(f) f.style.transform='scaleX(0)';
+  }
+  function celebrate(box){
+    if(!ok()) return;
+    try{
+      const {animate}=anime, colors=['#2563eb','#16a34a','#f59e0b','#e11d48','#7db4ff'], n=18;
+      for(let i=0;i<n;i++){
+        const s=document.createElement('span'); s.className='confetti'; s.setAttribute('aria-hidden','true');
+        s.style.background=colors[i%colors.length]; box.appendChild(s);
+        const ang=(Math.PI*2)*(i/n)+Math.random()*.4, dist=50+Math.random()*60;
+        animate(s,{translateX:[0,Math.cos(ang)*dist],translateY:[0,Math.sin(ang)*dist-20],rotate:[0,Math.random()*360],
+          opacity:[1,0],scale:[1,.4],duration:900+Math.random()*400,ease:'outCubic',onComplete:()=>s.remove()});
+      }
+    }catch(e){}
+  }
+
+  // ---- first-load intro ----
+  function splitChars(el){
+    const chars=[];
+    el.setAttribute('aria-label',(el.innerText||el.textContent).replace(/\s+/g,' ').trim());
+    [...el.childNodes].forEach(n=>{
+      if(n.nodeType!==3) return;
+      const frag=document.createDocumentFragment();
+      n.textContent.split(/(\s+)/).forEach(part=>{
+        if(!part) return;
+        if(/^\s+$/.test(part)){ frag.appendChild(document.createTextNode(' ')); return; }
+        const w=document.createElement('span'); w.className='w'; w.setAttribute('aria-hidden','true');
+        [...part].forEach(ch=>{ const c=document.createElement('span'); c.className='c'; c.textContent=ch; w.appendChild(c); chars.push(c); });
+        frag.appendChild(w);
+      });
+      n.replaceWith(frag);
+    });
+    return chars;
+  }
+  function intro(){
+    const {animate,stagger}=anime;
+    try{ animate('.logo i',{rotate:[-180,0],scale:[0,1],duration:900,ease:'outBack'}); }catch(e){}
+
+    const h1=document.querySelector('.hero h1');
+    if(h1 && !h1.dataset.split){
+      h1.dataset.split='1';
+      const chars=splitChars(h1);
+      chars.forEach(c=>{c.style.opacity='0';});
+      try{
+        animate(chars,{opacity:[0,1],translateY:[36,0],rotate:[6,0],duration:800,delay:stagger(34,{start:200}),ease:'outBack',onComplete:()=>clear(chars)});
+      }catch(e){ clear(chars); }
+    }
+    reveal('.hero .badge',{y:14,stagger:0,duration:550});
+    reveal('.hero > div:first-of-type > p, .hero-actions, .hero > div:first-of-type > .small',{y:16,stagger:90,delay:420,duration:600});
+    reveal('.hero-card',{x:30,y:0,stagger:0,delay:350,duration:800,ease:'outExpo'});
+    reveal('.hero-mini > div',{y:10,scale:.85,stagger:90,delay:800,duration:500,ease:'outBack'});
+
+    const k=document.getElementById('kpiTotal');
+    if(k){
+      const n=parseInt(k.textContent,10)||0, o={v:0};
+      k.textContent='0';
+      try{ animate(o,{v:n,duration:1400,delay:600,ease:'outExpo',onUpdate:()=>{k.textContent=Math.round(o.v);},onComplete:()=>{k.textContent=n;}}); }
+      catch(e){ k.textContent=n; }
+    }
+    try{
+      orbs=[
+        animate('.hero .o1',{translateX:[0,-40],translateY:[0,30],scale:[1,1.25],duration:6000,ease:'inOutSine',loop:true,alternate:true}),
+        animate('.hero .o2',{translateX:[0,50],translateY:[0,-25],scale:[1,1.2],duration:7500,ease:'inOutSine',loop:true,alternate:true})
+      ];
+    }catch(e){}
+    scroll('#home .section-head, #home .grid > .card, #home > .card');
+  }
+
+  function boot(){
+    if(!ok()){
+      if(mq&&mq.matches&&!force) console.info('[TechFix] Animations are off because this device has "reduce motion" enabled. Add ?motion=on to the URL to preview them.');
+      return;
+    }
+    // icon spring when hovering a card
+    document.addEventListener('mouseover',e=>{
+      if(!ok()) return;
+      const c=e.target.closest&&e.target.closest('.card.hover');
+      if(!c||c.contains(e.relatedTarget)) return;
+      const ic=c.querySelector('.icon'); if(!ic) return;
+      try{ anime.animate(ic,{scale:[1.22,1],rotate:[-12,0],duration:700,ease:'outElastic(1,.5)',onComplete:()=>ic.style.removeProperty('transform')}); }catch(_){}
+    });
+    window.addEventListener('beforeprint',showAll);
+    if(performance.now()>3000) return;   // library arrived late: skip the intro so nothing flashes
+    intro();
+  }
+  return {enter,list,pop,popFav,bubble,dots,stop,mini,spinTheme,setProgress,resetProgress,celebrate,boot};
+})();
+
 // Normalize old shapes (6/7 fields) -> 9 fields
 (function normalize(){
   for(let i=0;i<P.length;i++){
@@ -606,8 +901,9 @@ function view(id,btn){
   { const hb=document.querySelector('.hamburger'); if(hb) hb.setAttribute('aria-expanded','false'); }
   window.scrollTo({top:0,behavior:'smooth'});
   if(id==='favorites') renderFavs();
-  if(id==='problems') render();
+  if(id==='problems'){ listKey=null; render(); }
   if(id==='home') renderHomeExtras();
+  FX.enter(id);
 }
 function goBack(){ view(lastList, document.querySelectorAll('nav button')[ lastList==='favorites'?3 : 1]); }
 
@@ -642,6 +938,7 @@ function render(){
   renderRecent();
   const favs=getFavs();
   if(!a.length){
+    listKey=null;
     const qRaw = (document.getElementById('q')?.value||'').trim();
     const ytQ = qRaw ? encodeURIComponent(qRaw + ' computer troubleshooting') : 'computer%20troubleshooting%20for%20beginners';
     const searchUrl = `https://www.youtube.com/results?search_query=${ytQ}`;
@@ -690,18 +987,19 @@ function render(){
     const diff=x[6]||'Beginner';
     const time=x[7]||'—';
     return `<div class="card problem hover">
-      <button class="fav ${isFav?'on':''}" onclick="toggleFav(${i});render()" title="Favorite">${isFav?'♥':'♡'}</button>
+      <button class="fav ${isFav?'on':''}" data-fav="${i}" onclick="toggleFav(${i});render()" title="Favorite">${isFav?'♥':'♡'}</button>
       <div class="icon">${escHtml(x[1])}</div><small style="color:var(--blue-ink);font-weight:800">${escHtml(x[0])}</small>
       <h3>${escHtml(x[2])}</h3><p>${escHtml(x[3])}</p>
       <div class="meta"><span class="tag ${diff==='Intermediate'?'amber':'green'}">${diff}</span><span class="tag">${time}</span></div>
       <div class="actions"><button class="btn primary small" style="flex:1" onclick="openP(${i})">View solution →</button></div>
     </div>`;
   }).join('');
+  FX.list(cat+'|'+q+'|'+sort+'|'+a.map(o=>o.i).join(','));
 }
 
 // ---------- DETAIL ----------
 function openP(i, from){
-  currentId=i; completedSteps=new Set(); resetFeedback();
+  currentId=i; completedSteps=new Set(); resetFeedback(); FX.resetProgress();
   const x=P[i];
   document.getElementById('ico').textContent=x[1];
   document.getElementById('cat2').textContent=x[0];
@@ -747,16 +1045,20 @@ function openP(i, from){
 function toggleStep(n){
   const el=document.getElementById('chk'+n);
   if(completedSteps.has(n)){ completedSteps.delete(n); el.classList.remove('on'); }
-  else { completedSteps.add(n); el.classList.add('on'); }
+  else { completedSteps.add(n); el.classList.add('on'); FX.pop(el); }
   updateProgress();
 }
 function updateProgress(){
   const x=P[currentId]; if(!x) return;
   const total=(x[5]||[]).length, done=completedSteps.size;
   const box=document.getElementById('progressBox');
-  if(done===0){ box.style.display='none'; return; }
+  if(done===0){ box.style.display='none'; FX.setProgress(0); return; }
+  const wasHidden=box.style.display==='none';
   box.style.display='block';
-  box.textContent=`Progress: ${done}/${total} steps completed${done===total?' — great! Check if the issue is resolved.':''}`;
+  document.getElementById('progTxt').textContent=`Progress: ${done}/${total} steps completed${done===total?' — great! Check if the issue is resolved.':''}`;
+  FX.setProgress(total?done/total:0);
+  if(wasHidden) FX.pop(box);
+  if(total && done===total) FX.celebrate(box);
 }
 function getFavs(){ try{return JSON.parse(localStorage.getItem('techfix_favs')||'[]')}catch{return[]} }
 function setFavs(v){ localStorage.setItem('techfix_favs', JSON.stringify(v)); updateFavCount(); }
@@ -764,6 +1066,7 @@ function toggleFav(i){
   const favs=getFavs(); const idx=favs.indexOf(i);
   if(idx>-1) favs.splice(idx,1); else favs.push(i);
   setFavs(favs); updateFavBtn(); renderFavs();
+  if(idx===-1) FX.popFav(i);
 }
 function updateFavBtn(){
   if(currentId==null) return;
@@ -998,6 +1301,7 @@ function applyTheme(t){
 function toggleTheme(){
   const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
   applyTheme(t);
+  FX.spinTheme();
   try{ localStorage.setItem('techfix_theme',t); }catch(e){}
 }
 try{
@@ -1012,6 +1316,7 @@ function appendBubble(html, who='bot', containerId='chatLog', save=true){
   if(!log) return;
   const d=document.createElement('div'); d.className='bubble '+(who==='me'?'me':'bot'); d.innerHTML=html;
   log.appendChild(d); log.scrollTop=log.scrollHeight;
+  if(save) FX.bubble(d,who==='me'?'me':'bot');
   if(save && chatStore[containerId]){
     chatStore[containerId].push({who:who==='me'?'me':'bot',html});
     chatStore[containerId]=chatStore[containerId].slice(-40);
@@ -1021,11 +1326,12 @@ function appendBubble(html, who='bot', containerId='chatLog', save=true){
 }
 function showTyping(containerId){
   const log=document.getElementById(containerId);
-  const d=document.createElement('div'); d.className='bubble bot typing'; d.id=containerId+'_typing'; d.textContent='TechFix is thinking...';
+  const d=document.createElement('div'); d.className='bubble bot typing'; d.id=containerId+'_typing'; d.innerHTML='TechFix is thinking<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>';
   log.appendChild(d); log.scrollTop=log.scrollHeight;
+  FX.dots(d);
 }
 function hideTyping(containerId){
-  const el=document.getElementById(containerId+'_typing'); if(el) el.remove();
+  const el=document.getElementById(containerId+'_typing'); if(el){ FX.stop(el); el.remove(); }
 }
 
 async function handleChat(query, containerId){
@@ -1080,7 +1386,7 @@ function askChat(q){
   setTimeout(()=>{ if(q) { appendBubble(escHtml(q),'me','chatLog'); handleChat(q,'chatLog'); if(inp) inp.value=''; } }, 180);
 }
 let miniOpen=false;
-function toggleMini(){ miniOpen=!miniOpen; document.getElementById('miniChat').classList.toggle('open', miniOpen); if(miniOpen) document.getElementById('miniInput').focus(); }
+function toggleMini(){ miniOpen=!miniOpen; document.getElementById('miniChat').classList.toggle('open', miniOpen); if(miniOpen) document.getElementById('miniInput').focus(); FX.mini(miniOpen); }
 
 // ---------- NAV / A11Y / PWA ----------
 function toggleNav(btn){
@@ -1113,6 +1419,8 @@ if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
 // ---------- INIT ----------
 try{ localStorage.removeItem('techfix_ai'); }catch(e){}
 renderHomeExtras(); render(); updateFavCount(); restoreChats(); applyTheme(document.documentElement.getAttribute('data-theme')||'light'); updateAIStatus();
+// start the animations once anime.js has loaded
+onAnime(FX.boot);
 </script>
 </body>
 </html>
