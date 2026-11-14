@@ -794,8 +794,8 @@ return function(title,n){
 })();
 
 let P = JSON.parse(JSON.stringify(DEFAULT_P));
-// Optional: guides.json (exported from /admin) replaces the built-in guides for everyone.
-fetch('guides.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(g=>{
+// Guides published from /admin (stored on the server) replace the built-in ones for everyone.
+fetch('/api/guides',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(g=>{
   if(Array.isArray(g)&&g.length&&g.every(x=>Array.isArray(x)&&x.length>=9&&Array.isArray(x[4])&&Array.isArray(x[5]))){
     P=g; if(typeof render==='function') render();
   }
@@ -1328,12 +1328,13 @@ function resetFeedback(){
   ['fbYes','fbNo'].forEach(id=>{ const b=document.getElementById(id); if(b){ b.style.borderColor=''; b.style.background=''; b.setAttribute('aria-pressed','false'); } });
 }
 function feedback(yes){
-  const msg=yes? 'Thanks! Glad it helped. Your feedback is saved on this device only.' : 'Noted. Try the next step or describe your case in the <a href="#" class="chat-link" onclick="view(\'chat\',navBtn(2));return false">Chat Assistant</a> to find another guide.';
+  const msg=yes? 'Thanks! Glad it helped. Your vote was sent to the TechFix team (no personal data).' : 'Noted. Try the next step or describe your case in the <a href="#" class="chat-link" onclick="view(\'chat\',navBtn(2));return false">Chat Assistant</a> to find another guide.';
   resetFeedback();
   const n=document.getElementById('fbNote'); if(n){ n.innerHTML=msg; n.style.color=yes?'var(--green-tx)':'var(--amber-tx)'; n.style.fontWeight='700'; }
   const chosen=document.getElementById(yes?'fbYes':'fbNo');
   if(chosen){ chosen.style.borderColor=yes?'var(--green-bd)':'var(--amber-bd)'; chosen.style.background=yes?'var(--green-bg)':'var(--amber-bg)'; chosen.setAttribute('aria-pressed','true'); }
   try{ const k='techfix_feedback'; const arr=JSON.parse(localStorage.getItem(k)||'[]'); arr.push({id:currentId, yes, at:new Date().toISOString()}); localStorage.setItem(k, JSON.stringify(arr)); }catch(e){}
+  try{ fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:P[currentId][2],yes}),keepalive:true}).catch(()=>{}); }catch(e){}
 }
 function shareDetail(){
   const x=P[currentId]; const text=`TechFix: ${x[2]} — ${x[3]}`;

@@ -27,12 +27,12 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 6px;
 .bar{height:8px;border-radius:5px;background:var(--bd);overflow:hidden;min-width:90px}.bar i{display:block;height:100%;background:var(--ok)}
 dialog{border:1px solid var(--bd);border-radius:14px;background:var(--sf);color:var(--tx);width:min(640px,94vw);padding:18px}
 dialog::backdrop{background:rgba(0,0,0,.5)}.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.note{font-size:13px;color:var(--mu)}section{display:none}section.on{display:block}
+.note{font-size:13px;color:var(--mu)}button:disabled{opacity:.45;cursor:default}section{display:none}section.on{display:block}
 @media(max-width:560px){.g2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<header><h1>🛠️ TechFix Admin</h1><span class="s" id="src"></span><a href="/">← Back to site</a><button id="theme" aria-label="Toggle theme">🌓</button></header>
+<header><h1>🛠️ TechFix Admin</h1><span class="s" id="src"></span><span class="s" id="dirty" style="color:var(--bad)"></span><button class="p" id="pub" disabled>Publish changes</button><a href="/">← Back to site</a><button id="theme" aria-label="Toggle theme">🌓</button></header>
 <main>
 <nav id="tabs"><button class="on" data-t="g">Guides</button><button data-t="s">Feedback &amp; stats</button><button data-t="p">Publish</button></nav>
 
@@ -42,28 +42,24 @@ dialog::backdrop{background:rgba(0,0,0,.5)}.g2{display:grid;grid-template-column
     <span class="s"><b id="gcount">0</b> guides</span>
     <button class="p" id="new">+ New guide</button></div></div>
   <div class="card" style="overflow:auto"><table><thead><tr><th></th><th>Guide</th><th>Category</th><th>Steps</th><th></th></tr></thead><tbody id="glist"></tbody></table></div>
-  <p class="note">Changes are saved as a draft in this browser. Go to <b>Publish</b> to put them on the live site.</p>
+  <p class="note">Edits stay on this page until you click <b>Publish changes</b>.</p>
 </section>
 
 <section id="s">
   <div class="kpis" id="kpis"></div>
-  <div class="card" style="overflow:auto"><b>Helpfulness by guide</b> <span class="s">(guides that need work are listed first)</span>
+  <div class="card" style="overflow:auto"><b>Helpfulness by guide</b> <span class="s">(guides that need work first)</span>
     <table><thead><tr><th>Guide</th><th>👍</th><th>👎</th><th>Helpful</th></tr></thead><tbody id="fb"></tbody></table></div>
-  <div class="card"><b>Recently opened guides</b><div id="recent" class="s" style="margin-top:6px"></div></div>
-  <div class="card"><div class="row"><button id="exp">Export this device's data</button>
-    <label class="btn" style="margin:0">Import data from another device<input id="imp" type="file" accept=".json" hidden></label>
-    <button class="x" id="clrimp">Clear imported</button></div>
-    <p class="note">The site saves feedback only in each visitor's own browser, so these numbers cover this device plus anything you import. Collecting from every student automatically needs a small server-side add-on.</p></div>
+  <div class="card"><b>Latest feedback</b><div id="recent" class="s" style="margin-top:6px"></div></div>
+  <div class="card"><div class="row"><button id="rf">Refresh</button><button id="csv">Export CSV</button><button class="x" id="clr">Delete all feedback</button></div>
+  <p class="note">Feedback from every device that uses the site is collected here. Only the guide, yes/no and time are stored, no personal data.</p></div>
 </section>
 
-<section id="p">
-  <div class="card"><b>Publish your guide changes</b>
-    <ol><li>Click <b>Download guides.json</b>.</li><li>Put it in your repo's <code>techfix-netlify</code> folder, next to <code>index.html</code>, and commit.</li><li>Netlify redeploys and the site loads your guides for everyone.</li></ol>
-    <div class="row"><button class="p" id="dl">Download guides.json</button><button id="cp">Copy JSON</button>
-    <label class="btn" style="margin:0">Import guides.json<input id="gimp" type="file" accept=".json" hidden></label>
-    <button class="x" id="reset">Reset to live site</button></div>
-    <p class="note" id="pmsg"></p></div>
-</section>
+<section id="p"><div class="card"><b>Publish to the live site</b>
+  <p>Edits from the Guides tab go live for everyone when you click <b>Publish changes</b>. They are stored on the server, so no GitHub commit is needed.</p>
+  <div class="row"><button class="p" id="pub2" disabled>Publish changes</button><button id="dl">Download backup (JSON)</button>
+  <label class="btn" style="margin:0">Import JSON<input id="gimp" type="file" accept=".json" hidden></label>
+  <button class="x" id="reset">Discard &amp; reload from server</button></div>
+  <p class="note" id="pmsg"></p></div></section>
 </main>
 
 <dialog id="f"><form id="form" method="dialog">
@@ -83,20 +79,26 @@ dialog::backdrop{background:rgba(0,0,0,.5)}.g2{display:grid;grid-template-column
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const KD='techfix_admin_draft',KI='techfix_admin_imported';
-let G=[],editing=-1;
+let G=[],editing=-1,dirty=false,FB=[];
 const valid=g=>Array.isArray(g)&&g.length>0&&g.every(x=>Array.isArray(x)&&x.length>=9&&Array.isArray(x[4])&&Array.isArray(x[5]));
-const jget=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}};
-const save=()=>{try{localStorage.setItem(KD,JSON.stringify(G))}catch{}};
 const lines=v=>v.split('\n').map(x=>x.trim()).filter(Boolean);
+const api=async(path,opt={})=>{const r=await fetch('/admin/api/'+path,{...opt,headers:{'Content-Type':'application/json'}});if(!r.ok)throw new Error(r.status);return r.json()};
+const msg=t=>{$('#pmsg').textContent=t;$('#src').textContent=t};
+const setDirty=d=>{dirty=d;$('#dirty').textContent=d?'● Unpublished changes':'';$$('#pub,#pub2').forEach(b=>b.disabled=!d)};
+addEventListener('beforeunload',e=>{if(dirty)e.preventDefault()});
 
-async function load(skipDraft){
-  if(!skipDraft){const d=jget(KD,null);if(valid(d)){G=d;return'saved draft'}}
-  try{const r=await fetch('/guides.json',{cache:'no-store'});if(r.ok){const g=await r.json();if(valid(g)){G=g;return'guides.json'}}}catch{}
-  try{const t=await(await fetch('/',{cache:'no-store'})).text();const a=t.indexOf('const DEFAULT_P = [');const b=t.indexOf('\n];',a);
-    const g=new Function('return '+t.slice(t.indexOf('[',a),b+2))();if(valid(g)){G=g;return'live site'}}catch{}
-  return'none (use Publish → Import)';
+async function load(){
+  try{const g=await api('guides');if(valid(g)){G=g;setDirty(false);return'Loaded from server'}}
+  catch(e){return'Could not reach the server ('+e.message+')'}
+  try{const g=await(await fetch('/guides.json',{cache:'no-store'})).json();if(valid(g)){G=g;setDirty(true);return'Loaded starter guides — click Publish changes to put them live'}}catch{}
+  return'No guides found (use Publish → Import JSON)';
 }
+async function publish(){
+  if(!valid(G))return alert('There are no guides to publish.');
+  try{const r=await api('guides',{method:'PUT',body:JSON.stringify(G)});setDirty(false);msg('Published '+r.count+' guides. They are live now.')}
+  catch(e){msg('Publish failed ('+e.message+'). Nothing was changed.')}
+}
+$$('#pub,#pub2').forEach(b=>b.onclick=publish);
 
 /* ---------- Guides ---------- */
 function renderGuides(){
@@ -121,54 +123,41 @@ $('#form').onsubmit=e=>{
   const steps=lines($('#fstep').value);if(!steps.length){alert('Add at least one step.');return}
   const g=[$('#fcat').value.trim(),$('#fico').value.trim()||'🛠️',$('#ftit').value.trim(),$('#fdesc').value.trim(),lines($('#fcau').value),steps,$('#flev').value,$('#ftime').value.trim()||'—',$('#ftool').value.trim()||'None'];
   if(editing>-1)G[editing]=g;else G.push(g);
-  save();renderGuides();$('#f').close();
+  setDirty(true);renderGuides();$('#f').close();
 };
 $('#glist').onclick=e=>{
   const b=e.target.closest('button');if(!b)return;
   if(b.dataset.e)openForm(+b.dataset.e);
-  if(b.dataset.d){const g=G[+b.dataset.d];if(confirm('Delete "'+g[2]+'"?')){G.splice(+b.dataset.d,1);save();renderGuides();}}
+  if(b.dataset.d){const g=G[+b.dataset.d];if(confirm('Delete "'+g[2]+'"?')){G.splice(+b.dataset.d,1);setDirty(true);renderGuides();}}
 };
 $('#gq').oninput=renderGuides;
 
-/* ---------- Stats ---------- */
-function renderStats(){
-  const fb=[...jget('techfix_feedback',[]),...jget(KI,[])].filter(x=>x&&typeof x.id==='number');
-  const per={};fb.forEach(x=>{const p=per[x.id]||(per[x.id]={y:0,n:0});x.yes?p.y++:p.n++});
-  const yes=fb.filter(x=>x.yes).length,pct=fb.length?Math.round(yes/fb.length*100):0;
-  const chats=Object.keys(localStorage).filter(k=>/^techfix_chat_/.test(k)).reduce((n,k)=>n+(jget(k,[]).length||0),0);
-  $('#kpis').innerHTML=[[fb.length,'Feedback responses'],[fb.length?pct+'%':'—','Found it helpful'],[Object.keys(per).length,'Guides rated'],[jget('techfix_favs',[]).length,'Favorites saved'],[chats,'Chat messages (this device)']]
+/* ---------- Feedback from all devices ---------- */
+async function renderStats(){
+  try{FB=await api('feedback')}catch(e){$('#kpis').innerHTML='<div class="kpi"><span class="s">Could not load feedback ('+esc(e.message)+')</span></div>';return}
+  const per={};FB.forEach(x=>{const p=per[x.title]||(per[x.title]={y:0,n:0});x.yes?p.y++:p.n++});
+  const yes=FB.filter(x=>x.yes).length,pct=FB.length?Math.round(yes/FB.length*100):0,wk=FB.filter(x=>Date.now()-Date.parse(x.at)<6048e5).length;
+  $('#kpis').innerHTML=[[FB.length,'Total feedback'],[FB.length?pct+'%':'—','Found it helpful'],[Object.keys(per).length,'Guides rated'],[wk,'Last 7 days']]
     .map(([v,l])=>`<div class="kpi"><b>${v}</b><span class="s">${l}</span></div>`).join('');
-  $('#fb').innerHTML=Object.entries(per).sort((a,b)=>b[1].n-a[1].n).map(([id,p])=>{
-    const t=G[id]?G[id][2]:'Guide #'+id,h=Math.round(p.y/(p.y+p.n)*100);
+  $('#fb').innerHTML=Object.entries(per).sort((a,b)=>b[1].n-a[1].n).map(([t,p])=>{const h=Math.round(p.y/(p.y+p.n)*100);
     return`<tr><td>${esc(t)}</td><td>${p.y}</td><td>${p.n}</td><td><div class="bar" title="${h}%"><i style="width:${h}%"></i></div></td></tr>`}).join('')||'<tr><td colspan="4">No feedback yet.</td></tr>';
-  const r=jget('techfix_history',[]).filter(i=>G[i]).slice(0,8).map(i=>esc(G[i][1]+' '+G[i][2]));
-  $('#recent').innerHTML=r.length?r.join('<br>'):'Nothing yet.';
+  $('#recent').innerHTML=FB.slice(-10).reverse().map(x=>`${x.yes?'👍':'👎'} ${esc(x.title)} · ${esc(new Date(x.at).toLocaleString())}`).join('<br>')||'Nothing yet.';
 }
-const dl=(name,text)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500)};
-$('#exp').onclick=()=>dl('techfix-feedback.json',JSON.stringify(jget('techfix_feedback',[]),null,2));
-$('#imp').onchange=async e=>{
-  const f=e.target.files[0];if(!f)return;
-  try{const d=JSON.parse(await f.text()),a=Array.isArray(d)?d:d.feedback;if(!Array.isArray(a))throw 0;
-    localStorage.setItem(KI,JSON.stringify([...jget(KI,[]),...a.filter(x=>x&&typeof x.id==='number')]));renderStats();}
-  catch{alert('That file is not a TechFix feedback export.')}
-  e.target.value='';
-};
-$('#clrimp').onclick=()=>{if(confirm('Remove all imported feedback?')){localStorage.removeItem(KI);renderStats()}};
+const dl=(name,text,type='application/json')=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500)};
+const cell=v=>'"'+(/^[=+\-@\t\r]/.test(v)?"'"+v:v).replace(/"/g,'""')+'"'; // blocks spreadsheet formula injection
+$('#rf').onclick=renderStats;
+$('#csv').onclick=()=>dl('techfix-feedback.csv','time,guide,helpful\n'+FB.map(x=>[cell(x.at),cell(x.title),x.yes?'yes':'no'].join(',')).join('\n'),'text/csv');
+$('#clr').onclick=async()=>{if(!confirm('Permanently delete ALL feedback from the server?'))return;try{await api('feedback',{method:'DELETE'});renderStats()}catch(e){alert('Failed ('+e.message+')')}};
 
-/* ---------- Publish ---------- */
-const msg=t=>{$('#pmsg').textContent=t};
-$('#dl').onclick=()=>{dl('guides.json',JSON.stringify(G,null,1));msg('Downloaded '+G.length+' guides. Commit it next to index.html.')};
-$('#cp').onclick=async()=>{try{await navigator.clipboard.writeText(JSON.stringify(G,null,1));msg('Copied to clipboard.')}catch{msg('Copy failed — use Download instead.')}};
+/* ---------- Backup / import / reset ---------- */
+$('#dl').onclick=()=>{dl('guides-backup.json',JSON.stringify(G,null,1));msg('Backup downloaded.')};
 $('#gimp').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;
-  try{const g=JSON.parse(await f.text());if(!valid(g))throw 0;G=g;save();renderGuides();msg('Imported '+G.length+' guides.')}
-  catch{msg('That file is not a valid guides.json.')}
+  try{const g=JSON.parse(await f.text());if(!valid(g))throw 0;G=g;setDirty(true);renderGuides();msg('Imported '+G.length+' guides — click Publish changes to put them live.')}
+  catch{msg('That file is not a valid guides JSON.')}
   e.target.value='';
 };
-$('#reset').onclick=async()=>{
-  if(!confirm('Discard your draft and reload the guides that are live on the site?'))return;
-  localStorage.removeItem(KD);$('#src').textContent='Loaded from: '+await load(true);renderGuides();msg('Draft reset.');
-};
+$('#reset').onclick=async()=>{if(dirty&&!confirm('Discard your unpublished edits?'))return;msg(await load());renderGuides()};
 
 /* ---------- Tabs & theme ---------- */
 $('#tabs').onclick=e=>{
@@ -182,7 +171,7 @@ $('#theme').onclick=()=>{
   d.dataset.theme=cur==='dark'?'light':'dark';try{localStorage.setItem('techfix_theme',d.dataset.theme)}catch{}
 };
 try{const t=localStorage.getItem('techfix_theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch{}
-load().then(s=>{$('#src').textContent='Loaded from: '+s;renderGuides()});
+load().then(t=>{msg(t);renderGuides()});
 </script>
 </body>
 </html>
