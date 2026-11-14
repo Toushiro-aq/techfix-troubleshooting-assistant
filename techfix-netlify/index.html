@@ -464,7 +464,7 @@ footer{text-align:center;color:var(--muted);padding:28px 10px;font-size:12.5px;b
           <div class="bubble bot">Hi! I'm your TechFix Assistant. 👋<br>Tell me what's happening — e.g., <b>black screen</b>, <b>no display</b>, or <b>Wi-Fi not connecting</b>. I'll break down what's likely wrong, walk you through the fix step by step, and suggest YouTube lessons so you learn how it works.</div>
         </div>
         <div class="chat-tools"><span class="small muted">💾 Chat is saved on this device only. Clear it on shared computers.</span><button class="btn small ghost" onclick="clearChat('chatLog')">🗑️ Clear chat</button></div>
-        <div class="chat-input"><input id="chatInput" aria-label="Describe your computer problem" placeholder="Type your problem... (e.g., black screen, slow PC)" onkeydown="if(event.key==='Enter')sendChat()"><button class="btn primary" onclick="sendChat()">Send</button></div>
+        <div class="chat-input"><input id="chatInput" maxlength="600" aria-label="Describe your computer problem" placeholder="Type your problem... (e.g., black screen, slow PC)" onkeydown="if(event.key==='Enter')sendChat()"><button class="btn primary" onclick="sendChat()">Send</button></div>
       </div>
     </div>
   </section>
@@ -518,7 +518,7 @@ footer{text-align:center;color:var(--muted);padding:28px 10px;font-size:12.5px;b
 <div class="mini-chat" id="miniChat">
   <div class="mini-head"><span>TechFix Assistant</span><span style="display:flex;gap:6px"><button onclick="clearChat('miniLog')" aria-label="Clear chat" title="Clear chat" style="background:rgba(255,255,255,.15);border:0;color:#fff;border-radius:8px;padding:4px 8px;cursor:pointer">🗑️</button><button onclick="toggleMini()" aria-label="Close chat" style="background:rgba(255,255,255,.15);border:0;color:#fff;border-radius:8px;padding:4px 8px;cursor:pointer">✕</button></span></div>
   <div id="miniLog" class="mini-log"><div class="bubble bot">Hi! Try “black screen” or “no display” — I’ll find the guide. I can suggest a matching guide and basic steps.</div></div>
-  <div class="chat-input"><input id="miniInput" aria-label="Describe your computer problem" placeholder="Type here... (e.g., black screen)" onkeydown="if(event.key==='Enter')sendMini()"><button class="btn primary small" onclick="sendMini()">Send</button></div>
+  <div class="chat-input"><input id="miniInput" maxlength="600" aria-label="Describe your computer problem" placeholder="Type here... (e.g., black screen)" onkeydown="if(event.key==='Enter')sendMini()"><button class="btn primary small" onclick="sendMini()">Send</button></div>
 </div>
 
 <script>
@@ -565,7 +565,45 @@ function normalizeQuery(q){
   return s;
 }
 function ytTokens(s){return normalizeQuery(s).toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w=>w.length>2 && !STOP_WORDS.has(w));}
-function tokens(s){return normalizeQuery(s).toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w=>w.length>2 && !STOP_WORDS.has(w));}
+// Words that carry no meaning for matching (so "asdf working" no longer matches a random guide)
+const GENERIC_WORDS=new Set(['working','work','works','worked','problem','problems','issue','issues','computer','computers','pc','laptop','laptops','help','please','fix','how','can','cant','wont','don','didn','what','why','when','keeps','still','again','tried','try','ang','ng','sa','na','ko','po','yung','ung','mga','kasi','ako','ito','may','nag','ayaw','hindi','walang','pero','lang','naman','bakit','paano','pano']);
+// Offline keyword table: English, Tagalog and Taglish phrases -> the words used in the guides.
+// re = what the user may type; add = guide words appended; not/need = optional guards.
+const SYNONYMS=[
+  {re:/black ?screen|blank ?screen|no signal|no video|no image|no picture|nothing (on|shows?|appears?|displays?)|screen (is |goes |went )?(black|blank|dark)|monitor (is )?(not|won'?t|doesn'?t) (work|turn|show|display)|walang (display|signal|image|video)|itim na screen|di umiilaw (ang )?monitor|dead screen/,add:'no display monitor'},
+  {re:/\b(lag|laggy|lagging|hang|hanging|freezes?|freezing|frozen|sluggish|mabagal|bumabagal|pabagal|nag-?hang|nag-?freeze|takes? (forever|too long))\b/,add:'slow computer',not:/internet|wi-?fi|\bnet\b|download|browsing|website|boot|startup|start ?up|start-up/},
+  {re:/(slow|matagal|mabagal|long).{0,15}(boot|start ?up|start-up|mag-?start|mag-?boot|mag-?on|turn on|log ?in|desktop)|(boot|start ?up|start-up).{0,15}(slow|long|matagal|mabagal)/,add:'slow startup'},
+  {re:/(slow|mabagal|bagal|lag|laggy|poor).{0,20}(internet|\bnet\b|wi-?fi|download|browsing|connection|data)|(internet|\bnet\b|wi-?fi|download|connection).{0,20}(slow|mabagal|bagal|lag|buffering)|buffering|high ping/,add:'internet is slow'},
+  {re:/(no|walang|without) (internet|net)\b|cannot browse|can'?t browse|(websites?|pages?|sites?).{0,12}(not|won'?t|doesn'?t|di|hindi).{0,10}(load|open)|limited (connection|access)|connected (but|pero) (no|walang)|\bdns\b/,add:'no internet connected no browsing'},
+  {re:/wi ?-?fi|wireless|no networks?|di maka-?connect|hindi maka-?connect|ayaw mag-?connect/,add:'wi-fi not connecting wireless network',not:/slow|bagal|lag|internet|\bnet\b|password|\bpass\b|no browsing|connected/},
+  {re:/(asks?|asking|keeps?|hinihingi|humihingi).{0,25}(password|\bpass\b)|password.{0,20}(again|repeatedly|always|wrong|incorrect|paulit)|(incorrect|wrong) password/,add:'wi-fi asks for password repeatedly password',need:/wi ?-?fi|network|internet|router/},
+  {re:/print|paper jam|toner|\bink\b|cartridge|ayaw mag-?print|di nagpi-?print/,add:'printer not printing'},
+  {re:/no (sound|audio)|walang (tunog|sound|audio)|speakers?|\bmuted?\b|volume|di marinig|hindi marinig|cannot hear|can'?t hear|crackling|distorted sound|\btunog\b/,add:'no sound audio speaker',not:/\bmic\b|microphone|headset|headphone|earphone|earbud|boses/},
+  {re:/\bmic\b|microphone|headset|headphones?|earphones?|earbuds?|airpods|walang boses|di ako marinig|hindi ako marinig|can'?t hear me|cannot hear me|others can'?t hear/,add:'headset microphone not working'},
+  {re:/won'?t (open|start|launch)|not (opening|launching|starting|loading)|can'?t open|cannot open|ayaw (mag-?open|magbukas|mag-?start)|di (nagbubukas|bumubukas)|hindi (nagbubukas|bumubukas|nabubuksan)|crash|keeps? closing|closes? (immediately|right away|by itself)|nag-?crash|not responding|application|program|\bapps?\b/,add:'application not opening program',not:/blue ?screen|bsod|website|browser|internet|wi-?fi|printer|print/},
+  {re:/keyboard|\bkeys?\b|typing|can'?t type|cannot type|key stuck|stuck key|ayaw mag-?type|letters? (not|di|hindi)/,add:'keyboard keys not working'},
+  {re:/mouse|cursor|pointer|trackpad|touchpad|\bclicks?\b|scroll|double ?click|ayaw gumalaw/,add:'mouse not working cursor'},
+  {re:/overheat|too hot|very hot|so hot|\bhot\b|mainit|umiinit|\binit\b|fan (is )?(loud|noisy|spinning|running)|loud fan|noisy fan|maingay|thermal|heating|\bheat\b|burning smell|shuts? ?down (by itself|suddenly|randomly)|auto ?shut ?down|nag-?shutdown/,add:'computer overheating hot fan'},
+  {re:/(storage|disk|drive|space|memory).{0,15}(full|low|almost|not enough|puno|ubos|running out)|(full|low|puno|ubos).{0,15}(storage|disk|drive|space)|\bc ?drive\b|out of space|no space|not enough space|low storage|low disk|free up|puno na|walang space/,add:'storage almost full free space'},
+  {re:/bsod|blue ?screen|asul na screen|stop code|critical process|system thread|irql|page fault|kernel (security|data)|ran into a problem|sad face/,add:'blue screen error bsod'},
+  {re:/virus|malware|spyware|adware|ransomware|trojan|hack(ed)?|pop ?-?ups?|\bads\b|redirect|suspicious|unknown (program|app|software)|toolbar|hijack/,add:'pop-ups possible malware'},
+  {re:/\busb\b|flash ?drive|pen ?drive|thumb ?drive|external (hard )?(drive|disk|hdd|ssd)|(device|drive|disk).{0,12}(not|di|hindi).{0,10}(detect|recogni|show|read|appear)|not (detected|recognized)|di (nade-?detect|nababasa)|hindi (nade-?detect|nababasa)/,add:'usb device not recognized',not:/keyboard|mouse|printer/},
+  {re:/windows update|update(s|d|ing)?\b|upgrad|nagu-?update|nag-?update|stuck at \d+ ?%|installing updates?|working on updates/,add:'windows update stuck'},
+  {re:/battery|lowbat|low bat|drain|nauubos|mabilis (maubos|ma-?lowbat|ma-?lobat)|bilis (maubos|ma-?lowbat)|not charging|di (nagcha-?charge|nacha-?charge)/,add:'laptop battery drains fast'},
+  {re:/flicker|flashing screen|screen (is )?(flashing|blinking|shaking|jitter|glitch)|glitch|random lines|lines on (the )?screen|horizontal lines|vertical lines|kumikislap|pumipitik|nanginginig|artifact/,add:'display flickering lines'},
+  {re:/won'?t (turn|power|boot|start) ?(on|up)?|doesn'?t (turn|power|boot|start) ?(on|up)?|not (turning|powering|booting) ?(on|up)?|no power|power button|no lights|dead pc|ayaw (mag-?on|umandar|bumukas)|di (nag-?o-?on|umaandar|bumubukas)|hindi (nag-?o-?on|umaandar|bumubukas)/,add:"computer won't turn on power",not:/\bapps?\b|program|application|browser|website/}
+];
+function expandSynonyms(s){
+  let out=s;
+  for(const e of SYNONYMS){
+    if(e.re.test(s) && !(e.not&&e.not.test(s)) && !(e.need&&!e.need.test(s))) out+=' '+e.add;
+  }
+  return out;
+}
+function tokens(s){
+  const t=expandSynonyms(normalizeQuery(s)).toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w=>w.length>2 && !STOP_WORDS.has(w) && !GENERIC_WORDS.has(w));
+  return [...new Set(t)];
+}
 
 // ---------- YOUTUBE FALLBACK ----------
 // ---------- YOUTUBE FALLBACK — CAREFULLY MAPPED TO EACH GUIDE ----------
@@ -598,18 +636,16 @@ const YT_VIDEOS=[
 function ytUrl(v){ return `https://www.youtube.com/results?search_query=${encodeURIComponent(v.query)}`; }
 // General search for any query (scores against title+tags+query)
 function youtubeForQuery(q){
-  const t=ytTokens(q);
-  if(!t.length) return YT_VIDEOS.slice(0,3);
+  const t=tokens(q); if(!t.length) return [];
   const scored=YT_VIDEOS.map(v=>{
     let sc=0;
     const hay=(v.title+' '+v.tags.join(' ')+' '+v.query).toLowerCase();
-    for(const w of t) if(hay.includes(w)) sc+=1.5;
-    // exact tag phrase bonus
+    for(const w of t) if(new RegExp('\\b'+w).test(hay)) sc+=1.5;
     for(const tag of v.tags) if(t.join(' ').includes(tag) || tag.split(' ').every(p=>t.includes(p))) sc+=0.5;
     return {v,sc};
-  }).sort((a,b)=>b.sc-a.sc);
-  const top=scored.filter(x=>x.sc>=1.5).slice(0,3).map(x=>x.v);
-  return top.length ? top : scored.slice(0,3).map(x=>x.v);
+  }).sort((x,y)=>y.sc-x.sc);
+  // No fallback: if nothing is genuinely relevant, return nothing instead of random videos.
+  return scored.filter(x=>x.sc>=3).slice(0,3).map(x=>x.v);
 }
 // STRICT matcher for guide detail pages — only returns truly relevant videos
 function videosForGuide(guideTitle){
@@ -758,6 +794,12 @@ return function(title,n){
 })();
 
 let P = JSON.parse(JSON.stringify(DEFAULT_P));
+// Optional: guides.json (exported from /admin) replaces the built-in guides for everyone.
+fetch('guides.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(g=>{
+  if(Array.isArray(g)&&g.length&&g.every(x=>Array.isArray(x)&&x.length>=9&&Array.isArray(x[4])&&Array.isArray(x[5]))){
+    P=g; if(typeof render==='function') render();
+  }
+}).catch(()=>{});
 let cat='All';
 let currentId=null;
 let lastList='problems';
@@ -1135,7 +1177,7 @@ function render(){
         <div class="card" style="text-align:center;padding:22px">
           <div style="font-size:32px">🔎</div>
           <h3>No matching guide in TechFix</h3>
-          <p class="muted">We don't have a guide for "<b style="color:var(--navy)">${escHtml(qRaw||'that search')}</b>" yet. Try another keyword (e.g., <b>black screen</b> finds <b>No Display</b>), pick a category, ask the assistant, or watch a video below.</p>
+          <p class="muted">We don't have a guide for "<b style="color:var(--navy)">${escHtml(qRaw||'that search')}</b>" yet. Try another keyword (e.g., <b>black screen</b> finds <b>No Display</b>), pick a category, ask the assistant${vids.length?', or watch a video below':''}.</p>
           <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px">
             <button class="btn primary small" onclick="view('chat',navBtn(2))">💬 Ask Assistant</button>
             <button class="btn small ghost" onclick="document.getElementById('q').value='';cat='All';render()">Clear search</button>
@@ -1143,8 +1185,8 @@ function render(){
           </div>
         </div>
 
-        <div class="section-head" style="margin:18px 0 10px"><h2 style="font-size:18px">🎥 Try these YouTube tutorials</h2><p>Opens on YouTube — helpful while we add more guides. “Black screen” videos match “No Display”.</p></div>
-        <div class="video-grid">${cards}</div>
+        ${vids.length?`<div class="section-head" style="margin:18px 0 10px"><h2 style="font-size:18px">🎥 Possibly related YouTube tutorials</h2><p>Opens on YouTube — helpful while we add more guides.</p></div>
+        <div class="video-grid">${cards}</div>`:''}
 
         <div class="card" style="margin-top:14px">
           <h3 style="margin:0 0 6px">📖 How to use TechFix</h3>
@@ -1305,17 +1347,20 @@ function shareDetail(){
 // ===============================================================
 function scoreGuide(query, guide){
   const q=tokens(query); if(!q.length) return 0;
-  const hay=normalizeQuery(guide.join(' ')).toLowerCase();
+  const prep=t=>normalizeQuery(t).toLowerCase().replace(/wi-fi/g,'wi-fi wifi');
+  const hay=prep(guide.join(' ')), title=prep(guide[2]);
   let sc=0;
-  for(const w of q){ if(hay.includes(w)) sc+=2; }
-  const title=normalizeQuery(guide[2]).toLowerCase();
-  for(const w of q){ if(title.includes(w)) sc+=2.5; }
+  for(const w of q){
+    const re=new RegExp('\\b'+w);   // word-start match, so "ear" no longer hits "clear"
+    if(re.test(hay)) sc+=2;
+    if(re.test(title)) sc+=2.5;
+  }
   return sc;
 }
 function findBest(query){
   let best=-1, bestScore=0;
   for(let i=0;i<P.length;i++){ const s=scoreGuide(query, P[i]); if(s>bestScore){bestScore=s; best=i;} }
-  return bestScore>=2? best : -1;
+  return bestScore>=3.5? best : -1;
 }
 
 // ---------- BUILT-IN ASSISTANT SERVICE ----------
@@ -1345,7 +1390,13 @@ async function callAI(userQuery, containerId){
   // API credentials stay server-side; visitors are never asked to enter personal keys.
   const guidesList=P.map((g,i)=>`${i+1}. ${g[2]} [${g[0]}] — ${g[3]} Possible causes: ${(g[4]||[]).join('; ')}. Steps: ${(g[5]||[]).join(' ')}`).join('\n');
   const history=(chatHistory[containerId]||[]).slice(-8);
-  const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:userQuery,guides:guidesList,history})});
+  userQuery=String(userQuery).slice(0,600);
+  // Abort after 20s so the chat never hangs on "thinking"; the caller falls back to the local guide matcher.
+  const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),20000);
+  let res;
+  try{
+    res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:userQuery,guides:guidesList,history}),signal:ctrl.signal});
+  } finally { clearTimeout(to); }
   const data=await res.json().catch(()=>({}));
   if(!res.ok || (!data.text && !data.reply)) throw new Error(data.error || ('Built-in assistant unavailable ('+res.status+').'));
   // Safety net: never show raw JSON to the student — use the offline guide matcher instead
@@ -1410,6 +1461,7 @@ function replySummary(r){
   return parts.join('\n');
 }
 
+let lastLocalGuide=-1;
 function localChatReply(query){
   // Greetings / thanks / small talk get a normal reply, not a guide search
   const small=query.toLowerCase().replace(/[^a-z\s']/g,' ').trim();
@@ -1417,17 +1469,29 @@ function localChatReply(query){
     return {type:'chat', html:"Hi! 👋 How can I help you today? Tell me what's happening with your computer, like <b>no display</b>, <b>slow PC</b>, or <b>Wi-Fi not connecting</b>."};
   if(/^(thanks?|thank you( so much| po)?|salamat( po)?|ty|ok(ay)?|nice|cool|got it)$/.test(small))
     return {type:'chat', html:"You're welcome! 😊 Let me know if you run into another problem."};
+  // "Still not working?" -> give the NEXT steps of the last guide instead of searching again
+  if(/still (not|isn'?t|doesn'?t|no)|i tried|tried (those|these|the) steps|didn'?t work|did not work|hindi gumana|di gumana|ayaw pa rin|hindi pa rin|di pa rin/.test(small)){
+    if(lastLocalGuide>-1){
+      const g=P[lastLocalGuide]; const more=(g[5]||[]).slice(2,5);
+      const list=more.map((t,n)=>`${n+3}. ${escHtml(t)}`).join('<br>');
+      return {type:'chat', html:`Sorry that didn't fix it. For <b>${escHtml(g[2])}</b>, try these next:<br>${list}<br><br>If it still fails, note any error message and ask your CSS/ICT teacher for hands-on help.<br><br><button class="btn primary small" onclick="openP(${lastLocalGuide})">Open full guide →</button>`};
+    }
+    return {type:'chat', html:"Sorry that didn't work. Tell me a bit more about the problem (what you see, any error message) and I'll look for a better match, or ask your CSS/ICT teacher for hands-on help."};
+  }
   const idx=findBest(query);
   if(idx>-1){
+    lastLocalGuide=idx;
     const x=P[idx];
     return {type:'guide', idx, html:`I found a close match: <b>${escHtml(x[2])}</b> <span class="tag blue" style="font-size:11px">${escHtml(x[0])}</span><br><span class="small">${escHtml(x[3])}</span><br><br><b>Quick steps:</b><br>1. ${escHtml(x[5][0])}<br>2. ${escHtml(x[5][1]||'')}<br><br><button class="btn primary small" onclick="openP(${idx})">Open full guide →</button> <button class="btn ghost small" onclick="askChat('still not working')">Still not working?</button>`};
   }
-  const ytQ=encodeURIComponent(query + ' computer troubleshooting');
-  const searchUrl=`https://www.youtube.com/results?search_query=${ytQ}`;
+  // No guide matched: suggest example searches. YouTube is shown ONLY if a video is genuinely relevant.
   const vids=youtubeForQuery(query).slice(0,2);
   const vHtml=vids.map(v=>`<a href="${ytUrl(v)}" target="_blank" rel="noopener" style="display:flex;gap:10px;align-items:center;border:1px solid var(--border);border-radius:10px;padding:10px;margin:6px 0;background:var(--surface);text-decoration:none;color:inherit"><span style="width:42px;height:42px;border-radius:9px;background:#ff0000;color:#fff;display:grid;place-items:center;flex-shrink:0">▶</span><span><b style="font-size:13px">${v.title}</b><br><span class="small">Opens a YouTube search</span></span></a>`).join('');
+  const videoBlock=vids.length?`<div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px;margin-top:10px"><b>🎥 Possibly related:</b>${vHtml}</div>`:'';
+  const ex=['black screen','slow computer','Wi-Fi not connecting','printer not printing','no sound','blue screen'];
+  const chips=ex.map(t=>`<button class="btn ghost small" onclick="askChat('${t}')">${t}</button>`).join(' ');
   const cats=[...new Set(P.map(x=>x[0]))].join(', ');
-  return {type:'nomatch', html:`I couldn't find an exact guide for "<b>${escHtml(query)}</b>".<br><br><div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px"><b>🎥 Try these YouTube tutorials:</b>${vHtml}<a href="${searchUrl}" target="_blank" rel="noopener" class="yt-btn" style="margin-top:6px;display:inline-flex;text-decoration:none">▶ More on YouTube</a></div><br><span class="small">Tip: “black screen” and “blank screen” also find <b>No Display</b>. Categories: ${cats}. Or <a href="#" onclick="view('problems',navBtn(1));return false" style="font-weight:800">browse all guides</a></span>`};
+  return {type:'nomatch', html:`I couldn't find a guide for “<b>${escHtml(query)}</b>”. Try describing what you see in a few words, for example:<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">${chips}</div>${videoBlock}<span class="small">Categories: ${cats}. Or <a href="#" onclick="view('problems',navBtn(1));return false" style="font-weight:800">browse all guides</a>.</span>`};
 }
 
 // ---------- SAVED CHAT (stays in this browser only) ----------
@@ -1516,7 +1580,18 @@ function hideTyping(containerId){
   const el=document.getElementById(containerId+'_typing'); if(el){ FX.stop(el); el.remove(); }
 }
 
+const chatBusy={};
+const CHAT_INPUT_OF={chatLog:'chatInput',miniLog:'miniInput'};
+function setChatBusy(id,on){
+  chatBusy[id]=on;
+  const inp=document.getElementById(CHAT_INPUT_OF[id]); if(!inp) return;
+  const btn=inp.parentElement&&inp.parentElement.querySelector('button'); if(btn) btn.disabled=on;
+}
 async function handleChat(query, containerId){
+  setChatBusy(containerId,true);
+  try{ await handleChatInner(query, containerId); } finally { setChatBusy(containerId,false); }
+}
+async function handleChatInner(query, containerId){
   // AI first (built-in or personal key); falls back to offline keyword matching on error
   showTyping(containerId);
   try{
@@ -1551,12 +1626,12 @@ async function handleChat(query, containerId){
 }
 
 async function sendChat(){
-  const inp=document.getElementById('chatInput'); const q=inp.value.trim(); if(!q) return;
+  const inp=document.getElementById('chatInput'); const q=inp.value.trim(); if(!q||chatBusy.chatLog) return;
   appendBubble(escHtml(q),'me','chatLog'); inp.value='';
   await handleChat(q,'chatLog');
 }
 async function sendMini(){
-  const inp=document.getElementById('miniInput'); const q=inp.value.trim(); if(!q) return;
+  const inp=document.getElementById('miniInput'); const q=inp.value.trim(); if(!q||chatBusy.miniLog) return;
   appendBubble(escHtml(q),'me','miniLog'); inp.value='';
   await handleChat(q,'miniLog');
 }
@@ -1565,7 +1640,7 @@ function askChat(q){
   if(inp) inp.value=q;
   view('chat',navBtn(2));
   // small delay so view renders, then send
-  setTimeout(()=>{ if(q) { appendBubble(escHtml(q),'me','chatLog'); handleChat(q,'chatLog'); if(inp) inp.value=''; } }, 180);
+  setTimeout(()=>{ if(q && !chatBusy.chatLog) { appendBubble(escHtml(q),'me','chatLog'); handleChat(q,'chatLog'); if(inp) inp.value=''; } }, 180);
 }
 let miniOpen=false;
 function toggleMini(){ miniOpen=!miniOpen; document.getElementById('miniChat').classList.toggle('open', miniOpen); if(miniOpen) document.getElementById('miniInput').focus(); FX.mini(miniOpen); }
