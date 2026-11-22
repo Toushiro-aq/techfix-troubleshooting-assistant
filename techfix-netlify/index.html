@@ -49,6 +49,7 @@
   --red:#e11d48;--red-soft:#fff1f2;--red-bd:#fecdd3;
   --radius:16px;--radius-lg:22px;
   --shadow:0 4px 24px rgba(15,23,42,.07);--shadow2:0 8px 32px rgba(15,23,42,.10);
+  --fab-bottom:48px; /* lifted above the bottom-corner watermark */
   --surface:#ffffff;--surface2:#f8fafc;--header-bg:rgba(255,255,255,.92);
   --navy-bg:#0f172a;--blue-ink:#2563eb;
 }
@@ -237,8 +238,8 @@ main{max-width:1120px;margin:0 auto;padding:28px 20px 40px}
 .chat-input{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border);background:var(--surface)}
 .chat-input input{flex:1;border:1px solid var(--border);border-radius:11px;padding:12px 14px;outline:none}
 .chat-input input:focus{border-color:var(--blue-border);box-shadow:0 0 0 4px var(--blue-soft)}
-.fab{position:fixed;right:18px;bottom:18px;z-index:30;width:56px;height:56px;border-radius:50%;border:0;background:var(--navy-bg);color:#fff;display:grid;place-items:center;cursor:pointer;box-shadow:0 10px 24px rgba(0,0,0,.2);font-size:22px}
-.mini-chat{position:fixed;right:18px;bottom:84px;width:360px;max-width:calc(100vw - 24px);height:430px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow2);display:none;flex-direction:column;overflow:hidden;z-index:30}
+.fab{position:fixed;right:18px;bottom:var(--fab-bottom);z-index:30;width:56px;height:56px;border-radius:50%;border:0;background:var(--navy-bg);color:#fff;display:grid;place-items:center;cursor:pointer;box-shadow:0 10px 24px rgba(0,0,0,.2);font-size:22px}
+.mini-chat{position:fixed;right:18px;bottom:calc(var(--fab-bottom) + 66px);width:360px;max-width:calc(100vw - 24px);height:430px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow2);display:none;flex-direction:column;overflow:hidden;z-index:30}
 .mini-chat.open{display:flex}
 .mini-head{background:var(--navy-bg);color:#fff;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;font-weight:800}
 .mini-log{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--surface2)}
