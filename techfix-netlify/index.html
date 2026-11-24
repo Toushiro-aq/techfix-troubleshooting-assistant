@@ -49,7 +49,6 @@
   --red:#e11d48;--red-soft:#fff1f2;--red-bd:#fecdd3;
   --radius:16px;--radius-lg:22px;
   --shadow:0 4px 24px rgba(15,23,42,.07);--shadow2:0 8px 32px rgba(15,23,42,.10);
-  --fab-bottom:48px; /* lifted above the bottom-corner watermark */
   --surface:#ffffff;--surface2:#f8fafc;--header-bg:rgba(255,255,255,.92);
   --navy-bg:#0f172a;--blue-ink:#2563eb;
 }
@@ -238,8 +237,8 @@ main{max-width:1120px;margin:0 auto;padding:28px 20px 40px}
 .chat-input{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border);background:var(--surface)}
 .chat-input input{flex:1;border:1px solid var(--border);border-radius:11px;padding:12px 14px;outline:none}
 .chat-input input:focus{border-color:var(--blue-border);box-shadow:0 0 0 4px var(--blue-soft)}
-.fab{position:fixed;right:18px;bottom:var(--fab-bottom);z-index:30;width:56px;height:56px;border-radius:50%;border:0;background:var(--navy-bg);color:#fff;display:grid;place-items:center;cursor:pointer;box-shadow:0 10px 24px rgba(0,0,0,.2);font-size:22px}
-.mini-chat{position:fixed;right:18px;bottom:calc(var(--fab-bottom) + 66px);width:360px;max-width:calc(100vw - 24px);height:430px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow2);display:none;flex-direction:column;overflow:hidden;z-index:30}
+.fab{position:fixed;right:18px;bottom:18px;z-index:30;width:56px;height:56px;border-radius:50%;border:0;background:var(--navy-bg);color:#fff;display:grid;place-items:center;cursor:pointer;box-shadow:0 10px 24px rgba(0,0,0,.2);font-size:22px}
+.mini-chat{position:fixed;right:18px;bottom:84px;width:360px;max-width:calc(100vw - 24px);height:430px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow2);display:none;flex-direction:column;overflow:hidden;z-index:30}
 .mini-chat.open{display:flex}
 .mini-head{background:var(--navy-bg);color:#fff;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;font-weight:800}
 .mini-log{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--surface2)}
@@ -305,7 +304,7 @@ footer{text-align:center;color:var(--muted);padding:28px 10px;font-size:12.5px;b
     <button onclick="view('problems',this)">Troubleshoot</button>
     <button onclick="view('chat',this)">Chat Assistant</button>
     <button onclick="view('favorites',this)">Favorites <span id="favCount" style="background:var(--blue-soft);color:var(--blue-ink);padding:2px 7px;border-radius:99px;font-size:11px;margin-left:4px">0</span></button>
-    <button onclick="view('about',this)">About</button>
+    <button onclick="view('about',this)">About</button><button onclick="view('suggest',this)">Suggest</button>
   </nav>
   <button id="themeBtn" class="theme-btn" onclick="toggleTheme()" aria-label="Switch to dark mode" title="Switch to dark mode">🌙</button>
 </header>
@@ -479,7 +478,24 @@ footer{text-align:center;color:var(--muted);padding:28px 10px;font-size:12.5px;b
 
   <!-- ABOUT -->
 
-  <section id="about" class="view">
+  <section id="suggest" class="view">
+<style>#suggest input,#suggest select,#suggest textarea{width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:inherit;font:inherit;margin:4px 0 14px}</style>
+<div class="section-head"><h2>💡 Suggest an improvement</h2><p>Missing a problem? A step that didn't work? Tell us and we'll review it.</p></div>
+<div class="card" style="max-width:640px">
+<form onsubmit="sendSuggestion(event)" autocomplete="off">
+  <label for="sgKind"><b>What is it about?</b></label>
+  <select id="sgKind" name="kind"><option value="guide">A new problem or guide I'd like to see</option><option value="improve">Improve an existing guide</option><option value="chat">The chat assistant</option><option value="other">Something else</option></select>
+  <label for="sgGuide"><b>Which guide?</b> <span class="small">(optional)</span></label>
+  <input id="sgGuide" name="guide" maxlength="80" placeholder="e.g. Wi-Fi Not Connecting">
+  <label for="sgText"><b>Your suggestion</b></label>
+  <textarea id="sgText" name="text" rows="5" maxlength="600" required placeholder="Describe the problem or what could be better (10 to 600 characters)"></textarea>
+  <input name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px">
+  <p class="small">Please don't include your name, passwords, or other personal information.</p>
+  <button class="btn primary" type="submit">Send suggestion</button>
+  <p class="small" id="sgNote" role="status" aria-live="polite" style="margin-top:10px;font-weight:700"></p>
+</form></div>
+</section>
+<section id="about" class="view">
     <div class="section-head"><h2>About TechFix</h2><p>Developmental Research — Grade 12 Computer Systems Servicing, Paliparan 3 Senior High School.</p></div>
     <div class="grid2">
       <div class="card">
@@ -498,6 +514,14 @@ footer{text-align:center;color:var(--muted);padding:28px 10px;font-size:12.5px;b
           <button class="btn small ghost" onclick="view('problems',navBtn(1))">Browse guides →</button>
           <button class="btn small ghost" onclick="window.print()">🖨️ Print this page</button>
         </div>
+      </div>
+    </div>
+    <div class="card" id="contact" style="margin-top:14px">
+      <h3 style="margin:0 0 6px">📬 Contact Us!</h3>
+      <p class="muted" style="font-size:13.5px;margin:0 0 10px">Questions, a problem with the site, or feedback for the research team? Reach out below, or send an idea through the <a href="#" onclick="view('suggest',navBtn(5));return false" style="font-weight:800">Suggest tab</a>.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btn small primary" href="https://www.facebook.com/search/top?q=Halil%20Sumonsang" target="_blank" rel="noopener noreferrer">💬 Facebook: Halil Sumonsang</a>
+        <a class="btn small ghost" id="contactMail" href="#">✉️ Email us</a>
       </div>
     </div>
     <div class="card" style="margin-top:14px">
@@ -1130,6 +1154,28 @@ function view(id,btn){
   if(id==='home') renderHomeExtras();
   FX.enter(id);
 }
+async function sendSuggestion(e){
+  e.preventDefault();
+  const f=e.target, note=document.getElementById('sgNote'), btn=f.querySelector('button[type=submit]');
+  const text=f.text.value.trim();
+  if(text.length<10){ note.textContent='Please write at least 10 characters.'; return; }
+  let last=0; try{ last=+localStorage.getItem('techfix_sug_at')||0; }catch(_){}
+  if(Date.now()-last<30000){ note.textContent='Please wait a few seconds before sending another one.'; return; }
+  btn.disabled=true; note.textContent='Sending…';
+  try{
+    const r=await fetch('/api/suggestions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:f.kind.value,guide:f.guide.value.trim(),text,website:f.website.value})});
+    if(!r.ok) throw new Error(r.status);
+    try{ localStorage.setItem('techfix_sug_at',String(Date.now())); }catch(_){}
+    f.reset(); note.textContent='Thank you! Your suggestion was sent to the TechFix team.';
+  }catch(err){ note.textContent='Sorry, that could not be sent. Please try again later.'; }
+  btn.disabled=false;
+}
+(function(){
+  const run=()=>{ const a=document.getElementById('contactMail'); if(!a) return;
+    const u='halil.sumonsang1', d='gmail.com';   // assembled here so the address isn't plain text in the page source
+    a.href='mailto:'+u+'@'+d+'?subject=TechFix'; a.textContent='✉️ '+u+'@'+d; };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',run); else run();
+})();
 function goBack(){ view(lastList, document.querySelectorAll('nav button')[ lastList==='favorites'?3 : 1]); }
 
 // ---------- HOME ----------
