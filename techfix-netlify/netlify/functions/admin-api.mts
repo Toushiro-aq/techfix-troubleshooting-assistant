@@ -41,5 +41,25 @@ export default async (req: Request) => {
       return json({ ok: true });
     }
   }
+  if (p.endsWith("/suggestions")) {
+    const id = url.searchParams.get("id") || "";
+    const validId = /^sg\/\d+-[a-z0-9]+$/.test(id);
+    if (req.method === "GET") {
+      const { blobs } = await store.list({ prefix: "sg/" });
+      const keys = blobs.map((b) => b.key).sort().reverse().slice(0, 1000);
+      const items = await Promise.all(keys.map(async (k) => { const v: any = await store.get(k, { type: "json" }); return v ? { id: k, ...v } : null; }));
+      return json(items.filter(Boolean));
+    }
+    if (req.method === "PATCH" && validId) {
+      let b: any;
+      try { b = JSON.parse(await req.text()); } catch { return json({ error: "bad json" }, 400); }
+      if (!["new", "reviewed", "done"].includes(b?.status)) return json({ error: "invalid" }, 400);
+      const cur: any = await store.get(id, { type: "json" });
+      if (!cur) return json({ error: "not found" }, 404);
+      await store.setJSON(id, { ...cur, status: b.status });
+      return json({ ok: true });
+    }
+    if (req.method === "DELETE" && validId) { await store.delete(id); return json({ ok: true }); }
+  }
   return json({ error: "not found" }, 404);
 };
